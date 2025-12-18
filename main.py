@@ -34,6 +34,7 @@ else:
 
 from covered_set import CoveredSetCalculator, CoverageTracker
 from neural_network import CoveredSetPolicy, ReinforcementTrainer, EvolutionaryOptimizer
+from records import RecordsManager, GhostTracker
 
 
 class LotteryLearner:
@@ -108,8 +109,23 @@ class LotteryLearner:
         # Statistics
         self.stats_history = deque(maxlen=1000)
 
+        # Records & Ghost tracking (like time trial ghost!)
+        self.records = RecordsManager()
+        self.ghost = GhostTracker(self.records, pool_size, draw_size, match_required)
+
+        # Set ghost on visualization
+        if self.viz and self.ghost.has_ghost:
+            self.viz.set_ghost(self.ghost.ghost_tickets, self.ghost.ghost_coverage)
+
         print("\n🎯 Ready to start training!")
         print(f"   Theoretical minimum: ~{self.calculator.theoretical_minimum_tickets()} tickets")
+
+        # Show ghost to beat
+        if self.ghost.has_ghost:
+            print(f"\n👻 GHOST TO BEAT: {self.ghost.ghost_tickets} tickets @ {self.ghost.ghost_coverage:.1f}% coverage")
+            print(f"   Can you beat the record?")
+        else:
+            print(f"\n🆕 No previous record - you're setting the first one!")
         print()
 
     def compute_heat_map(self, uncovered_draws: List[Tuple[int, ...]]) -> Dict[int, float]:
@@ -306,13 +322,19 @@ class LotteryLearner:
                             temperature=temperature
                         )
 
-                # Print progress
+                # Print progress with ghost comparison
                 if gen % 10 == 0 or stats['coverage'] >= self.target_coverage:
                     elapsed = time.time() - start_time
+                    ghost_status = self.ghost.get_ghost_status(self.best_coverage, len(self.best_tickets))
+
                     print(f"Gen {gen:4d} | Coverage: {stats['coverage']:6.2f}% | "
                           f"Tickets: {stats['num_tickets']:3d} | "
                           f"Best: {self.best_coverage:6.2f}% ({len(self.best_tickets)} tickets) | "
                           f"Temp: {temperature:.2f} | Time: {elapsed:.1f}s")
+
+                    # Show ghost comparison every 50 generations
+                    if gen % 50 == 0 and self.ghost.has_ghost:
+                        print(f"         👻 Ghost: {ghost_status['message']}")
 
                 # Start new generation in visualization
                 if self.viz and self.viz.running:
@@ -333,8 +355,13 @@ class LotteryLearner:
 
         total_time = time.time() - start_time
 
+        # Check for new record
+        is_new_record = self.ghost.is_new_record(self.best_coverage, len(self.best_tickets))
+
         # Final summary
         print("\n" + "="*60)
+        if is_new_record:
+            print("🏆 NEW RECORD SET! 🏆")
         print("📊 TRAINING COMPLETE")
         print("="*60)
         print(f"   Total time: {total_time:.1f}s")
@@ -342,6 +369,22 @@ class LotteryLearner:
         print(f"   Best coverage: {self.best_coverage:.2f}%")
         print(f"   Best ticket count: {len(self.best_tickets)}")
         print(f"   Theoretical minimum: ~{self.calculator.theoretical_minimum_tickets()}")
+
+        # Ghost comparison
+        if self.ghost.has_ghost:
+            ghost_status = self.ghost.get_ghost_status(self.best_coverage, len(self.best_tickets))
+            print(f"\n👻 VS GHOST: {ghost_status['message']}")
+            if ghost_status['ghost_tickets']:
+                print(f"   Previous record: {ghost_status['ghost_tickets']} tickets @ {ghost_status['ghost_coverage']:.1f}%")
+
+        # Save record if it's a new best
+        if is_new_record and self.best_tickets:
+            record = self.records.save_record(
+                self.pool_size, self.draw_size, self.match_required,
+                self.best_coverage, self.best_tickets,
+                self.generation, total_time
+            )
+            print(f"\n💾 Record saved to: records/tickets_{self.ghost.records.get_wheel_key(self.pool_size, self.draw_size, self.match_required)}.txt")
 
         if self.best_tickets:
             print(f"\n🎫 Best ticket set ({len(self.best_tickets)} tickets):")
@@ -352,6 +395,9 @@ class LotteryLearner:
                 print(f"   ... and {len(self.best_tickets) - 20} more tickets")
 
         print("="*60 + "\n")
+
+        # Show hall of fame
+        self.records.print_hall_of_fame()
 
         # Cleanup visualization
         if self.viz:

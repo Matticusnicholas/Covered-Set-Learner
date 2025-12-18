@@ -381,6 +381,92 @@ class StatsPanel:
         surface.blit(label, (rect.x + 5, rect.y + 5))
 
 
+class GhostPanel:
+    """Panel showing ghost (previous record) comparison."""
+
+    def __init__(self, x: int, y: int, width: int, height: int):
+        self.rect = pygame.Rect(x, y, width, height)
+        self.ghost_tickets = None
+        self.ghost_coverage = None
+        self.current_tickets = 0
+        self.current_coverage = 0.0
+        self.is_new_record = False
+        self.pulse_phase = 0
+
+    def set_ghost(self, ghost_tickets: int, ghost_coverage: float):
+        """Set the ghost record to beat."""
+        self.ghost_tickets = ghost_tickets
+        self.ghost_coverage = ghost_coverage
+
+    def update(self, dt: float, current_tickets: int, current_coverage: float):
+        """Update current progress."""
+        self.current_tickets = current_tickets
+        self.current_coverage = current_coverage
+        self.pulse_phase += dt * 4
+
+        # Check if we're beating the record
+        if self.ghost_tickets:
+            self.is_new_record = (
+                current_coverage >= self.ghost_coverage and
+                current_tickets <= self.ghost_tickets
+            )
+
+    def draw(self, surface: pygame.Surface, fonts: Dict[str, pygame.font.Font]):
+        """Draw the ghost panel."""
+        # Background with conditional glow
+        if self.is_new_record:
+            pulse = 0.5 + 0.5 * math.sin(self.pulse_phase)
+            glow_color = (0, int(100 + 50 * pulse), 0)
+            pygame.draw.rect(surface, glow_color, self.rect.inflate(4, 4), border_radius=17)
+
+        pygame.draw.rect(surface, Colors.BG_PANEL, self.rect, border_radius=15)
+        border_color = Colors.NEON_GREEN if self.is_new_record else Colors.GRID_LINE
+        pygame.draw.rect(surface, border_color, self.rect, 2, border_radius=15)
+
+        padding = 10
+        y_offset = self.rect.y + padding
+
+        # Title
+        title = fonts['medium'].render("👻 GHOST TO BEAT", True, Colors.NEON_PURPLE)
+        surface.blit(title, (self.rect.x + padding, y_offset))
+        y_offset += 30
+
+        if self.ghost_tickets is None:
+            # No ghost
+            no_ghost = fonts['small'].render("No record yet!", True, Colors.NEON_YELLOW)
+            surface.blit(no_ghost, (self.rect.x + padding, y_offset))
+            first_text = fonts['tiny'].render("You're setting the first record!", True, Colors.TEXT_SECONDARY)
+            surface.blit(first_text, (self.rect.x + padding, y_offset + 22))
+        else:
+            # Ghost record
+            ghost_text = fonts['small'].render(
+                f"Record: {self.ghost_tickets} tickets @ {self.ghost_coverage:.1f}%",
+                True, Colors.TEXT_PRIMARY
+            )
+            surface.blit(ghost_text, (self.rect.x + padding, y_offset))
+            y_offset += 25
+
+            # Current progress comparison
+            ticket_diff = self.current_tickets - self.ghost_tickets
+            if self.current_coverage >= self.ghost_coverage:
+                if ticket_diff < 0:
+                    status = f"🏆 {-ticket_diff} FEWER TICKETS!"
+                    color = Colors.NEON_GREEN
+                elif ticket_diff == 0:
+                    status = "✅ Matched record!"
+                    color = Colors.NEON_GREEN
+                else:
+                    status = f"⚠️ {ticket_diff} more tickets"
+                    color = Colors.NEON_ORANGE
+            else:
+                coverage_diff = self.current_coverage - self.ghost_coverage
+                status = f"📈 {coverage_diff:+.1f}% coverage"
+                color = Colors.NEON_YELLOW
+
+            status_text = fonts['small'].render(status, True, color)
+            surface.blit(status_text, (self.rect.x + padding, y_offset))
+
+
 class TicketDisplay:
     """Display generated tickets with animation."""
 
@@ -575,9 +661,10 @@ class StreamingVisualizer:
         grid_cols = 6 if pool_size <= 42 else 7 if pool_size <= 56 else 8
 
         # UI Components
-        self.number_grid = NumberGrid(50, 100, 400, 320, pool_size=pool_size, cols=grid_cols)
-        self.progress_bar = ProgressBar(50, 440, 400, 25, Colors.NEON_GREEN)
-        self.stats_panel = StatsPanel(50, 490, 400, 330)
+        self.number_grid = NumberGrid(50, 100, 400, 280, pool_size=pool_size, cols=grid_cols)
+        self.progress_bar = ProgressBar(50, 400, 400, 25, Colors.NEON_GREEN)
+        self.ghost_panel = GhostPanel(50, 445, 400, 95)
+        self.stats_panel = StatsPanel(50, 555, 400, 260)
         self.ticket_display = TicketDisplay(480, 100, 350, 720)
         self.neural_viz = NeuralNetworkViz(860, 100, 500, 320)
 
@@ -628,7 +715,12 @@ class StreamingVisualizer:
         if stats:
             self.stats_panel.update_stats(stats)
             coverage = stats.get('coverage', 0)
+            num_tickets = stats.get('num_tickets', 0)
+            best_coverage = stats.get('best_coverage', 0)
             self.progress_bar.set_progress(coverage / 100)
+
+            # Update ghost panel with best stats
+            self.ghost_panel.update(dt, num_tickets, best_coverage)
 
             if coverage > self.best_coverage:
                 self.best_coverage = coverage
@@ -641,11 +733,26 @@ class StreamingVisualizer:
                     speed=150
                 )
 
+            # Extra celebration if beating the ghost!
+            if self.ghost_panel.is_new_record and not hasattr(self, '_celebrated_record'):
+                self._celebrated_record = True
+                self.particles.emit(
+                    self.ghost_panel.rect.centerx,
+                    self.ghost_panel.rect.centery,
+                    count=50,
+                    color=Colors.NEON_GREEN,
+                    speed=200
+                )
+
         if current_ticket:
             self.number_grid.set_selected(set(current_ticket))
 
         if heat_map:
             self.number_grid.update_heat(heat_map)
+
+    def set_ghost(self, ghost_tickets: int, ghost_coverage: float):
+        """Set the ghost record to beat."""
+        self.ghost_panel.set_ghost(ghost_tickets, ghost_coverage)
 
     def add_ticket(self, ticket: Tuple[int, ...]):
         """Add a newly generated ticket."""
@@ -702,6 +809,7 @@ class StreamingVisualizer:
         self.number_grid.draw(self.screen, self.fonts['medium'])
         self.progress_bar.draw(self.screen, f"{self.progress_bar.progress.get() * 100:.1f}%",
                               self.fonts['small'])
+        self.ghost_panel.draw(self.screen, self.fonts)
         self.stats_panel.draw(self.screen, self.fonts)
         self.ticket_display.draw(self.screen, self.fonts)
         self.neural_viz.draw(self.screen, self.fonts)
