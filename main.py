@@ -180,11 +180,18 @@ class LotteryLearner:
         self.generation += 1
         tickets = []
 
+        # Clear visualization for new generation
+        if self.viz and hasattr(self.viz, 'new_generation'):
+            # Reset the ticket display for this generation
+            pass  # new_generation is called after, so tickets start fresh
+
         # Initial state
         uncovered = self.calculator.get_uncovered_draws([])
         heat_map = self.compute_heat_map(uncovered)
 
         start_time = time.time()
+
+        print(f"\n📝 Generation {self.generation} - Generating tickets...")
 
         for step in range(max_tickets):
             # Compute current state
@@ -213,12 +220,10 @@ class LotteryLearner:
             result = self.calculator.calculate_coverage(tickets)
             coverage = result['coverage']
 
-            # Update visualization
-            if self.viz and self.viz.running:
-                dt = self.viz.run_frame()
-
+            # Update visualization - show each ticket as it's generated
+            if self.viz:
                 # Update heat map periodically
-                if step % 5 == 0:
+                if step % 3 == 0:
                     uncovered = self.calculator.get_uncovered_draws(tickets)
                     heat_map = self.compute_heat_map(uncovered)
 
@@ -234,16 +239,31 @@ class LotteryLearner:
                     'temperature': temperature
                 }
 
+                # Add the new ticket to display
                 self.viz.add_ticket(ticket)
-                self.viz.update(dt, stats, ticket, heat_map)
 
-                # Only call draw for pygame visualizer
+                # Update with current ticket highlighted
+                self.viz.update(0.1, stats, ticket, heat_map)
+
+                # For pygame, call draw
                 if hasattr(self.viz, 'draw'):
                     self.viz.draw()
+
+                # Small delay so user can see each ticket being generated
+                if self.web_mode:
+                    time.sleep(0.15)  # 150ms delay for web mode
+
+                # Run frame for timing (handles events for pygame)
+                if hasattr(self.viz, 'run_frame'):
+                    self.viz.run_frame()
 
                 if not self.viz.running:
                     self.running = False
                     break
+            else:
+                # Headless mode - still print progress occasionally
+                if step % 10 == 0:
+                    print(f"  Ticket {step+1}: {tuple(n+1 for n in ticket)} -> {coverage:.1f}% coverage")
 
             # Check if we've reached target
             if coverage >= self.target_coverage:

@@ -107,10 +107,13 @@ class WebVisualizer:
         self._emit_update()
 
     def new_generation(self):
-        """Start a new generation."""
-        training_state['generation'] += 1
+        """Start a new generation - clears ticket list."""
         training_state['tickets'] = []
+        training_state['current_ticket'] = []
+        training_state['coverage'] = 0
+        training_state['num_tickets'] = 0
         self._emit_update()
+        print(f"🔄 Generation reset - tickets cleared")
 
     def set_best_tickets(self, tickets: List[Tuple[int, ...]]):
         """Set the best ticket set found."""

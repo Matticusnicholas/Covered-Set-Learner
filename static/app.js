@@ -13,7 +13,9 @@ let state = {
     lastUpdate: Date.now(),
     fps: 0,
     frameCount: 0,
-    lastFpsUpdate: Date.now()
+    lastFpsUpdate: Date.now(),
+    lastTicket: [],
+    celebrated: false
 };
 
 // Particle system
@@ -105,7 +107,20 @@ function handleTrainingUpdate(data) {
     updateGhostPanel(data);
 
     // Update number grid with heat map and selection
-    updateNumberGrid(data.heat_map || {}, data.current_ticket || []);
+    const currentTicket = data.current_ticket || [];
+    updateNumberGrid(data.heat_map || {}, currentTicket);
+
+    // Emit particles for newly selected numbers
+    if (currentTicket.length > 0 && JSON.stringify(currentTicket) !== JSON.stringify(state.lastTicket)) {
+        currentTicket.forEach(num => {
+            const cell = document.getElementById(`number-${num}`);
+            if (cell) {
+                const rect = cell.getBoundingClientRect();
+                emitParticles(rect.left + rect.width/2, rect.top + rect.height/2, 5, '#00ffff');
+            }
+        });
+        state.lastTicket = currentTicket;
+    }
 
     // Update tickets display
     updateTicketsList(data.tickets || []);
