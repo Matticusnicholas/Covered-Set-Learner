@@ -1,0 +1,17 @@
+# Deep Learning Covered Set Learner
+# GPU-accelerated neural network for lottery covered set optimization
+
+# Core Deep Learning (CUDA support)
+torch>=2.0.0
+torchvision>=0.15.0
+
+# Visualization & Streaming
+pygame>=2.5.0
+numpy>=1.24.0
+
+# Progress & Utilities
+tqdm>=4.65.0
+colorama>=0.4.6
+
+# Optional: For enhanced visuals
+pillow>=10.0.0
