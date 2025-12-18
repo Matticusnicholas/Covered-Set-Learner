@@ -552,24 +552,34 @@ class NeuralNetworkViz:
 class StreamingVisualizer:
     """Main visualization class for streaming."""
 
-    def __init__(self, width: int = 1920, height: int = 1080):
+    def __init__(self, width: int = 1920, height: int = 1080,
+                 pool_size: int = 36, draw_size: int = 5, match_required: int = 3):
         pygame.init()
-        pygame.display.set_caption("🎰 Neural Network Lottery Covered Set Learner")
+        pygame.display.set_caption("🎰 Neural Network Abbreviated Covered Set Learner")
 
         self.width = width
         self.height = height
         self.screen = pygame.display.set_mode((width, height))
         self.clock = pygame.time.Clock()
 
+        # Abbreviated wheel configuration
+        self.pool_size = pool_size
+        self.draw_size = draw_size
+        self.match_required = match_required
+        self.wheel_name = f"{match_required} of {draw_size} from {pool_size}"
+
         # Fonts
         self.fonts = self._load_fonts()
 
+        # Calculate grid columns based on pool size
+        grid_cols = 6 if pool_size <= 42 else 7 if pool_size <= 56 else 8
+
         # UI Components
-        self.number_grid = NumberGrid(50, 50, 400, 350, pool_size=36)
-        self.progress_bar = ProgressBar(50, 420, 400, 25, Colors.NEON_GREEN)
-        self.stats_panel = StatsPanel(50, 470, 400, 350)
-        self.ticket_display = TicketDisplay(480, 50, 350, 770)
-        self.neural_viz = NeuralNetworkViz(860, 50, 500, 350)
+        self.number_grid = NumberGrid(50, 100, 400, 320, pool_size=pool_size, cols=grid_cols)
+        self.progress_bar = ProgressBar(50, 440, 400, 25, Colors.NEON_GREEN)
+        self.stats_panel = StatsPanel(50, 490, 400, 330)
+        self.ticket_display = TicketDisplay(480, 100, 350, 720)
+        self.neural_viz = NeuralNetworkViz(860, 100, 500, 320)
 
         # Effects
         self.particles = ParticleSystem()
@@ -658,28 +668,35 @@ class StreamingVisualizer:
         # Clear screen
         self.screen.fill(Colors.BG_DARK)
 
-        # Draw title
+        # Draw main title with wheel configuration
         title = self.fonts['large'].render(
-            "🎰 NEURAL LOTTERY OPTIMIZER", True, Colors.NEON_CYAN
+            f"🎰 ABBREVIATED WHEEL: {self.wheel_name}", True, Colors.NEON_CYAN
         )
         title_rect = title.get_rect(center=(self.width // 2, 25))
         self.screen.blit(title, title_rect)
 
-        # Draw subtitle
+        # Draw subtitle explaining what this means
         subtitle = self.fonts['small'].render(
-            "Deep Learning Covered Set Discovery | CUDA Accelerated",
+            f"Finding minimum tickets to guarantee {self.match_required}+ matches | CUDA Accelerated",
             True, Colors.TEXT_SECONDARY
         )
         subtitle_rect = subtitle.get_rect(center=(self.width // 2, 55))
         self.screen.blit(subtitle, subtitle_rect)
 
-        # Draw configuration info
-        config_text = self.fonts['small'].render(
-            "Pool: 36 | Draw: 5 | Match: 3+ | Target: 100% Coverage",
-            True, Colors.NEON_YELLOW
-        )
-        config_rect = config_text.get_rect(topright=(self.width - 50, 15))
-        self.screen.blit(config_text, config_rect)
+        # Draw configuration box at top right
+        config_box = pygame.Rect(self.width - 320, 10, 310, 75)
+        pygame.draw.rect(self.screen, Colors.BG_PANEL, config_box, border_radius=10)
+        pygame.draw.rect(self.screen, Colors.NEON_PURPLE, config_box, 2, border_radius=10)
+
+        # Configuration details
+        config_lines = [
+            (f"Pool: {self.pool_size} numbers", Colors.TEXT_PRIMARY),
+            (f"Pick: {self.draw_size} per ticket", Colors.TEXT_PRIMARY),
+            (f"Match: {self.match_required}+ to win", Colors.NEON_GREEN),
+        ]
+        for i, (text, color) in enumerate(config_lines):
+            conf_text = self.fonts['small'].render(text, True, color)
+            self.screen.blit(conf_text, (self.width - 310, 18 + i * 22))
 
         # Draw components
         self.number_grid.draw(self.screen, self.fonts['medium'])
@@ -711,15 +728,19 @@ class StreamingVisualizer:
 
 
 if __name__ == "__main__":
-    # Test visualization
-    viz = StreamingVisualizer(1280, 720)
+    # Test visualization with configurable abbreviated wheel
+    # Example: 3 of 5 from 36 (default)
+    pool_size = 36
+    draw_size = 5
+    match_required = 3
+
+    viz = StreamingVisualizer(1280, 720, pool_size, draw_size, match_required)
 
     # Demo loop
     import time
     demo_tickets = [
-        (0, 5, 10, 15, 20),
-        (1, 6, 11, 16, 21),
-        (2, 7, 12, 17, 22),
+        tuple(sorted(random.sample(range(pool_size), draw_size)))
+        for _ in range(3)
     ]
 
     demo_coverage = 0
@@ -737,7 +758,7 @@ if __name__ == "__main__":
 
         # Add demo ticket periodically
         if random.random() < dt * 2:
-            ticket = tuple(sorted(random.sample(range(36), 5)))
+            ticket = tuple(sorted(random.sample(range(pool_size), draw_size)))
             viz.add_ticket(ticket)
 
         # Update with demo stats
@@ -750,7 +771,7 @@ if __name__ == "__main__":
         }
 
         # Demo heat map
-        heat_map = {i: random.random() for i in range(36)}
+        heat_map = {i: random.random() for i in range(pool_size)}
 
         viz.update(dt, stats, demo_tickets[demo_gen % 3] if demo_tickets else None, heat_map)
         viz.draw()

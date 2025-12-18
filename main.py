@@ -60,15 +60,18 @@ class LotteryLearner:
         self.headless = headless
         self.target_coverage = target_coverage
 
+        # Abbreviated wheel notation
+        self.wheel_name = f"{match_required} of {draw_size} from {pool_size}"
+
         print("\n" + "="*60)
-        print("🎰 NEURAL NETWORK LOTTERY COVERED SET LEARNER")
+        print("🎰 NEURAL NETWORK ABBREVIATED WHEEL LEARNER")
         print("="*60)
-        print(f"   Configuration:")
-        print(f"   • Pool Size: {pool_size} numbers")
-        print(f"   • Draw Size: {draw_size} numbers per ticket")
-        print(f"   • Match Required: {match_required}+ numbers")
-        print(f"   • Target Coverage: {target_coverage}%")
-        print(f"   • Mode: {'Headless' if headless else 'Visual (Streaming)'}")
+        print(f"   Wheel: {self.wheel_name}")
+        print(f"   ├─ Pool Size: {pool_size} numbers")
+        print(f"   ├─ Draw Size: {draw_size} numbers per ticket")
+        print(f"   ├─ Match Required: {match_required}+ numbers")
+        print(f"   ├─ Target Coverage: {target_coverage}%")
+        print(f"   └─ Mode: {'Headless' if headless else 'Visual (Streaming)'}")
         print("="*60 + "\n")
 
         # Initialize components
@@ -85,7 +88,12 @@ class LotteryLearner:
         if not headless:
             try:
                 from visualization import StreamingVisualizer
-                self.viz = StreamingVisualizer(1280, 720)
+                self.viz = StreamingVisualizer(
+                    width=1280, height=720,
+                    pool_size=pool_size,
+                    draw_size=draw_size,
+                    match_required=match_required
+                )
                 print("✅ Visualization initialized")
             except ImportError as e:
                 print(f"⚠️  Could not initialize visualization: {e}")
@@ -360,14 +368,20 @@ class LotteryLearner:
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(
-        description="Neural Network Lottery Covered Set Learner",
+        description="Neural Network Abbreviated Wheel / Covered Set Learner",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
+Abbreviated Wheel Notation: "M of D from P" means:
+  - P = Pool size (total numbers to choose from)
+  - D = Draw size (numbers per ticket)
+  - M = Match required (minimum numbers to match for coverage)
+
 Examples:
-    python main.py                          # Default: 36-pool, 5-draw, match 3+
-    python main.py --pool 45 --draw 6       # Custom lottery config
-    python main.py --headless --gens 500    # Headless training
-    python main.py --mode rl                # Pure reinforcement learning
+    python main.py                              # Default: 3 of 5 from 36
+    python main.py --pool 49 --draw 6 --match 4 # 4 of 6 from 49
+    python main.py --pool 45 --draw 6 --match 3 # 3 of 6 from 45
+    python main.py --headless --gens 500        # Train without visualization
+    python main.py --mode rl                    # Pure reinforcement learning
         """
     )
 

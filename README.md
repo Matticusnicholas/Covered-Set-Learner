@@ -1,20 +1,34 @@
-# 🎰 Neural Network Lottery Covered Set Learner
+# 🎰 Neural Network Abbreviated Wheel / Covered Set Learner
 
-A deep learning AI that learns to find optimal **covered sets** for lottery combinations using neural networks and CUDA acceleration. Features a beautiful, streaming-friendly visualization perfect for YouTube and TikTok content.
+A deep learning AI that learns to find optimal **abbreviated wheels** (covered sets) for lottery combinations using neural networks and CUDA acceleration. Features a beautiful, streaming-friendly visualization perfect for YouTube and TikTok content.
 
 ![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
 ![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-red.svg)
 ![CUDA](https://img.shields.io/badge/CUDA-Accelerated-green.svg)
 
-## 🎯 What is a Covered Set?
+## 🎯 What is an Abbreviated Wheel / Covered Set?
 
-A **covered set** guarantees that at least one ticket matches a minimum number of drawn numbers, no matter what combination is drawn. For example, with a 3-of-5 covered set from 36 numbers:
+An **abbreviated wheel** (also called a **covered set** or **lottery wheel**) guarantees that at least one ticket matches a minimum number of drawn numbers, no matter what combination is drawn.
 
-- **Pool**: 36 numbers
-- **Draw**: 5 numbers per ticket
-- **Match**: At least 3 numbers must match
+### Example: "3 of 5 from 36"
 
-The AI learns to find the **minimum number of tickets** needed to guarantee coverage for ANY possible lottery draw.
+This notation means:
+- **Pool (36)**: Choose from 36 total numbers
+- **Pick (5)**: Each ticket has 5 numbers
+- **Match (3)**: Guarantee at least 3 matching numbers
+
+So if you play this wheel and the lottery draws ANY 5 numbers from 1-36, at least one of your tickets will have 3+ matching numbers!
+
+### Common Abbreviated Wheel Configurations
+
+| Wheel | Pool | Pick | Match | Typical Tickets |
+|-------|------|------|-------|-----------------|
+| 3/5/36 | 36 | 5 | 3 | ~15-25 |
+| 4/6/49 | 49 | 6 | 4 | ~50-100 |
+| 3/6/45 | 45 | 6 | 3 | ~20-40 |
+| 5/6/49 | 49 | 6 | 5 | ~200+ |
+
+The AI learns to find the **minimum number of tickets** needed to guarantee coverage!
 
 ## ✨ Features
 
@@ -67,10 +81,16 @@ This launches the full visual experience with:
 python main.py --headless
 ```
 
-### Custom Configuration
+### Custom Abbreviated Wheel Configuration
 
 ```bash
-# Different lottery configuration
+# 3 of 5 from 36 (default)
+python main.py --pool 36 --draw 5 --match 3
+
+# 4 of 6 from 49 (like many national lotteries)
+python main.py --pool 49 --draw 6 --match 4
+
+# 3 of 6 from 45
 python main.py --pool 45 --draw 6 --match 3
 
 # More training generations
