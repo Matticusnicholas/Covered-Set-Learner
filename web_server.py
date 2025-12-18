@@ -1,0 +1,196 @@
+"""
+Web-Based Visualization Server
+==============================
+Beautiful browser-based interface for streaming the neural network training.
+Uses Flask + SocketIO for real-time updates.
+"""
+
+import os
+import json
+import threading
+import time
+from flask import Flask, render_template, jsonify
+from flask_socketio import SocketIO, emit
+from typing import Dict, List, Tuple, Optional
+
+# Create Flask app
+app = Flask(__name__,
+            template_folder='templates',
+            static_folder='static')
+app.config['SECRET_KEY'] = 'lottery-neural-network-secret'
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+
+# Global state for the training
+training_state = {
+    'running': False,
+    'generation': 0,
+    'coverage': 0.0,
+    'best_coverage': 0.0,
+    'num_tickets': 0,
+    'best_num_tickets': 0,
+    'tickets': [],
+    'heat_map': {},
+    'current_ticket': [],
+    'ghost_tickets': None,
+    'ghost_coverage': None,
+    'is_new_record': False,
+    'pool_size': 36,
+    'draw_size': 5,
+    'match_required': 3,
+    'wheel_name': '3 of 5 from 36',
+    'theoretical_min': 0,
+    'elapsed_time': 0,
+    'temperature': 1.0
+}
+
+
+class WebVisualizer:
+    """Web-based visualizer that sends updates via WebSocket."""
+
+    def __init__(self, pool_size: int = 36, draw_size: int = 5, match_required: int = 3):
+        self.pool_size = pool_size
+        self.draw_size = draw_size
+        self.match_required = match_required
+        self.running = True
+
+        # Update global state
+        training_state['pool_size'] = pool_size
+        training_state['draw_size'] = draw_size
+        training_state['match_required'] = match_required
+        training_state['wheel_name'] = f"{match_required} of {draw_size} from {pool_size}"
+        training_state['running'] = True
+
+    def set_ghost(self, ghost_tickets: int, ghost_coverage: float):
+        """Set the ghost record to beat."""
+        training_state['ghost_tickets'] = ghost_tickets
+        training_state['ghost_coverage'] = ghost_coverage
+        self._emit_update()
+
+    def set_theoretical_min(self, min_tickets: int):
+        """Set the theoretical minimum tickets."""
+        training_state['theoretical_min'] = min_tickets
+        self._emit_update()
+
+    def update(self, dt: float, stats: Dict = None, current_ticket: Tuple[int, ...] = None,
+               heat_map: Dict[int, float] = None):
+        """Update visualization with new data."""
+        if stats:
+            training_state['generation'] = stats.get('generation', 0)
+            training_state['coverage'] = stats.get('coverage', 0)
+            training_state['best_coverage'] = stats.get('best_coverage', 0)
+            training_state['num_tickets'] = stats.get('num_tickets', 0)
+            training_state['efficiency'] = stats.get('efficiency', 0)
+            training_state['temperature'] = stats.get('temperature', 1.0)
+            training_state['elapsed_time'] = stats.get('elapsed_time', 0)
+
+            # Check for new record
+            if training_state['ghost_tickets']:
+                training_state['is_new_record'] = (
+                    training_state['best_coverage'] >= training_state['ghost_coverage'] and
+                    training_state['num_tickets'] <= training_state['ghost_tickets']
+                )
+
+        if current_ticket:
+            training_state['current_ticket'] = list(current_ticket)
+
+        if heat_map:
+            training_state['heat_map'] = heat_map
+
+        self._emit_update()
+
+    def add_ticket(self, ticket: Tuple[int, ...]):
+        """Add a new ticket."""
+        training_state['tickets'].append(list(ticket))
+        # Keep only last 50 tickets for display
+        if len(training_state['tickets']) > 50:
+            training_state['tickets'] = training_state['tickets'][-50:]
+        self._emit_update()
+
+    def new_generation(self):
+        """Start a new generation."""
+        training_state['generation'] += 1
+        training_state['tickets'] = []
+        self._emit_update()
+
+    def set_best_tickets(self, tickets: List[Tuple[int, ...]]):
+        """Set the best ticket set found."""
+        training_state['best_tickets'] = [list(t) for t in tickets]
+        training_state['best_num_tickets'] = len(tickets)
+        self._emit_update()
+
+    def _emit_update(self):
+        """Emit update to all connected clients."""
+        socketio.emit('training_update', training_state)
+
+    def run_frame(self) -> float:
+        """Compatibility method - returns a small dt."""
+        socketio.sleep(0.05)  # 20 FPS update rate
+        return 0.05
+
+    def cleanup(self):
+        """Mark training as complete."""
+        training_state['running'] = False
+        self._emit_update()
+
+
+# Flask routes
+@app.route('/')
+def index():
+    """Serve the main visualization page."""
+    return render_template('index.html')
+
+
+@app.route('/api/state')
+def get_state():
+    """Get current training state."""
+    return jsonify(training_state)
+
+
+@app.route('/api/records')
+def get_records():
+    """Get hall of fame records."""
+    try:
+        from records import RecordsManager
+        manager = RecordsManager()
+        return jsonify(manager.get_all_records())
+    except:
+        return jsonify([])
+
+
+# SocketIO events
+@socketio.on('connect')
+def handle_connect():
+    """Handle client connection."""
+    print(f"🌐 Client connected")
+    emit('training_update', training_state)
+
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    """Handle client disconnection."""
+    print(f"🌐 Client disconnected")
+
+
+def run_server(host='0.0.0.0', port=5000, debug=False):
+    """Run the web server."""
+    print(f"\n🌐 Starting web visualization server...")
+    print(f"   Open http://localhost:{port} in your browser")
+    print(f"   Press Ctrl+C to stop\n")
+    socketio.run(app, host=host, port=port, debug=debug, allow_unsafe_werkzeug=True)
+
+
+def run_server_background(host='0.0.0.0', port=5000):
+    """Run the web server in a background thread."""
+    server_thread = threading.Thread(
+        target=lambda: socketio.run(app, host=host, port=port, debug=False, allow_unsafe_werkzeug=True),
+        daemon=True
+    )
+    server_thread.start()
+    print(f"\n🌐 Web visualization running at http://localhost:{port}")
+    print(f"   Open this URL in your browser to watch training!\n")
+    time.sleep(1)  # Give server time to start
+    return server_thread
+
+
+if __name__ == '__main__':
+    run_server(debug=True)

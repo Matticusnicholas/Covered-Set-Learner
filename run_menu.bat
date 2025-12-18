@@ -17,7 +17,8 @@ echo  ║   [3] 3 of 6 from 45  (Medium)                           ║
 echo  ║   [4] 5 of 6 from 49  (Hard - Many Tickets)              ║
 echo  ║   [5] Custom Configuration                               ║
 echo  ║                                                          ║
-echo  ║   [H] Run Headless (No Graphics)                         ║
+echo  ║   [W] WEB BROWSER MODE (Best for streaming!)             ║
+echo  ║   [H] Headless Mode (No graphics)                        ║
 echo  ║   [Q] Quit                                               ║
 echo  ║                                                          ║
 echo  ╚══════════════════════════════════════════════════════════╝
@@ -29,6 +30,7 @@ if "%choice%"=="2" goto run_4of6from49
 if "%choice%"=="3" goto run_3of6from45
 if "%choice%"=="4" goto run_5of6from49
 if "%choice%"=="5" goto custom
+if /i "%choice%"=="w" goto web_menu
 if /i "%choice%"=="h" goto headless_menu
 if /i "%choice%"=="q" goto quit
 
@@ -75,6 +77,31 @@ echo.
 echo  Running: %match% of %draw% from %pool%
 echo.
 call run.bat --pool %pool% --draw %draw% --match %match% --gens %gens%
+goto menu
+
+:web_menu
+cls
+echo.
+echo  ╔══════════════════════════════════════════════════════════╗
+echo  ║         WEB BROWSER MODE (Best for streaming!)           ║
+echo  ║     Beautiful interface at http://localhost:5000         ║
+echo  ╚══════════════════════════════════════════════════════════╝
+echo.
+set /p pool="  Enter POOL size (default 36): "
+set /p draw="  Enter DRAW size (default 5): "
+set /p match="  Enter MATCH required (default 3): "
+set /p gens="  Enter generations (default 500): "
+
+if "%pool%"=="" set pool=36
+if "%draw%"=="" set draw=5
+if "%match%"=="" set match=3
+if "%gens%"=="" set gens=500
+
+echo.
+echo  Starting web server...
+echo  Open http://localhost:5000 in your browser!
+echo.
+call run_web.bat --pool %pool% --draw %draw% --match %match% --gens %gens%
 goto menu
 
 :headless_menu

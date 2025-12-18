@@ -44,7 +44,8 @@ class LotteryLearner:
     """
 
     def __init__(self, pool_size: int = 36, draw_size: int = 5, match_required: int = 3,
-                 headless: bool = False, target_coverage: float = 100.0):
+                 headless: bool = False, web_mode: bool = False, web_port: int = 5000,
+                 target_coverage: float = 100.0):
         """
         Initialize the lottery learner.
 
@@ -53,16 +54,27 @@ class LotteryLearner:
             draw_size: Numbers drawn per ticket
             match_required: Minimum matches needed for coverage
             headless: If True, run without visualization
+            web_mode: If True, use web browser visualization
+            web_port: Port for web server
             target_coverage: Target coverage percentage (0-100)
         """
         self.pool_size = pool_size
         self.draw_size = draw_size
         self.match_required = match_required
         self.headless = headless
+        self.web_mode = web_mode
         self.target_coverage = target_coverage
 
         # Abbreviated wheel notation
         self.wheel_name = f"{match_required} of {draw_size} from {pool_size}"
+
+        # Determine visualization mode
+        if headless:
+            viz_mode = 'Headless'
+        elif web_mode:
+            viz_mode = f'Web Browser (http://localhost:{web_port})'
+        else:
+            viz_mode = 'Pygame Window'
 
         print("\n" + "="*60)
         print("🎰 NEURAL NETWORK ABBREVIATED WHEEL LEARNER")
@@ -72,7 +84,7 @@ class LotteryLearner:
         print(f"   ├─ Draw Size: {draw_size} numbers per ticket")
         print(f"   ├─ Match Required: {match_required}+ numbers")
         print(f"   ├─ Target Coverage: {target_coverage}%")
-        print(f"   └─ Mode: {'Headless' if headless else 'Visual (Streaming)'}")
+        print(f"   └─ Mode: {viz_mode}")
         print("="*60 + "\n")
 
         # Initialize components
@@ -84,9 +96,20 @@ class LotteryLearner:
         self.trainer = ReinforcementTrainer(self.policy, learning_rate=3e-4)
         self.tracker = CoverageTracker(self.calculator)
 
-        # Visualization (if not headless)
+        # Visualization
         self.viz = None
-        if not headless:
+        if web_mode:
+            try:
+                from web_server import WebVisualizer, run_server_background
+                run_server_background(port=web_port)
+                self.viz = WebVisualizer(pool_size, draw_size, match_required)
+                self.viz.set_theoretical_min(self.calculator.theoretical_minimum_tickets())
+                print("✅ Web visualization initialized")
+                print(f"   🌐 Open http://localhost:{web_port} in your browser!")
+            except ImportError as e:
+                print(f"⚠️  Could not initialize web visualization: {e}")
+                print("   Running in headless mode")
+        elif not headless:
             try:
                 from visualization import StreamingVisualizer
                 self.viz = StreamingVisualizer(
@@ -95,10 +118,10 @@ class LotteryLearner:
                     draw_size=draw_size,
                     match_required=match_required
                 )
-                print("✅ Visualization initialized")
+                print("✅ Pygame visualization initialized")
             except ImportError as e:
-                print(f"⚠️  Could not initialize visualization: {e}")
-                print("   Running in headless mode")
+                print(f"⚠️  Could not initialize pygame visualization: {e}")
+                print("   Try using --web for browser visualization")
 
         # Training state
         self.generation = 0
@@ -199,18 +222,24 @@ class LotteryLearner:
                     uncovered = self.calculator.get_uncovered_draws(tickets)
                     heat_map = self.compute_heat_map(uncovered)
 
+                current_time = time.time() - start_time
                 stats = {
                     'generation': self.generation,
                     'coverage': coverage,
                     'num_tickets': len(tickets),
                     'best_coverage': self.best_coverage,
                     'efficiency': coverage / len(tickets) if tickets else 0,
-                    'step': step
+                    'step': step,
+                    'elapsed_time': current_time,
+                    'temperature': temperature
                 }
 
                 self.viz.add_ticket(ticket)
                 self.viz.update(dt, stats, ticket, heat_map)
-                self.viz.draw()
+
+                # Only call draw for pygame visualizer
+                if hasattr(self.viz, 'draw'):
+                    self.viz.draw()
 
                 if not self.viz.running:
                     self.running = False
@@ -423,7 +452,8 @@ Abbreviated Wheel Notation: "M of D from P" means:
   - M = Match required (minimum numbers to match for coverage)
 
 Examples:
-    python main.py                              # Default: 3 of 5 from 36
+    python main.py                              # Default: 3 of 5 from 36 (pygame)
+    python main.py --web                        # Web browser visualization
     python main.py --pool 49 --draw 6 --match 4 # 4 of 6 from 49
     python main.py --pool 45 --draw 6 --match 3 # 3 of 6 from 45
     python main.py --headless --gens 500        # Train without visualization
@@ -445,6 +475,10 @@ Examples:
                        help='Training mode (default: hybrid)')
     parser.add_argument('--headless', action='store_true',
                        help='Run without visualization')
+    parser.add_argument('--web', action='store_true',
+                       help='Use web browser visualization (recommended for streaming)')
+    parser.add_argument('--port', type=int, default=5000,
+                       help='Port for web server (default: 5000)')
     parser.add_argument('--seed', type=int, default=None,
                        help='Random seed for reproducibility')
 
@@ -473,6 +507,8 @@ Examples:
         draw_size=args.draw,
         match_required=args.match,
         headless=args.headless,
+        web_mode=args.web,
+        web_port=args.port,
         target_coverage=args.target
     )
 
