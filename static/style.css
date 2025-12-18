@@ -309,6 +309,22 @@ body::before {
 .ghost-status.behind { color: var(--neon-orange); }
 .ghost-status.new-record { color: var(--neon-yellow); }
 
+.session-best {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1.2rem;
+    color: var(--neon-cyan);
+    margin-bottom: 15px;
+    padding: 8px 12px;
+    background: rgba(0, 255, 255, 0.1);
+    border-radius: 8px;
+    border: 1px solid rgba(0, 255, 255, 0.3);
+}
+
+.session-best strong {
+    color: var(--neon-green);
+    font-size: 1.4rem;
+}
+
 /* Stats Grid */
 .stats-grid {
     display: grid;

@@ -93,8 +93,23 @@ class LotteryLearner:
         self.calculator = CoveredSetCalculator(pool_size, draw_size, match_required)
         self.policy = CoveredSetPolicy(pool_size, draw_size, match_required,
                                        embed_dim=128, num_heads=4, num_layers=3)
+
+        # Try to load existing model weights
+        self.model_path = self.policy.get_model_path(pool_size, draw_size, match_required)
+        if self.policy.load_model(self.model_path):
+            print("   📚 Continuing from previous training session!")
+        else:
+            print("   🆕 Starting fresh neural network training")
+
         self.trainer = ReinforcementTrainer(self.policy, learning_rate=3e-4)
         self.tracker = CoverageTracker(self.calculator)
+
+        # Load best ticket count from records to inform the trainer
+        self.records = RecordsManager()
+        existing_record = self.records.get_record(pool_size, draw_size, match_required)
+        if existing_record and existing_record.get('coverage', 0) >= 99.999:
+            self.trainer.best_tickets_to_100 = existing_record['num_tickets']
+            print(f"   🎯 Targeting to beat: {existing_record['num_tickets']} tickets")
 
         # Visualization
         self.viz = None
@@ -132,8 +147,7 @@ class LotteryLearner:
         # Statistics
         self.stats_history = deque(maxlen=1000)
 
-        # Records & Ghost tracking (like time trial ghost!)
-        self.records = RecordsManager()
+        # Ghost tracking (like time trial ghost!) - self.records already initialized above
         self.ghost = GhostTracker(self.records, pool_size, draw_size, match_required)
 
         # Set ghost on visualization
@@ -405,6 +419,10 @@ class LotteryLearner:
                     if gen % 50 == 0 and self.ghost.has_ghost:
                         print(f"         👻 Ghost: {ghost_status['message']}")
 
+                # Auto-save model every 50 generations
+                if gen > 0 and gen % 50 == 0:
+                    self.policy.save_model(self.model_path)
+
                 # Start new generation in visualization
                 if self.viz and self.viz.running:
                     self.viz.new_generation()
@@ -464,6 +482,9 @@ class LotteryLearner:
                 print(f"   ... and {len(self.best_tickets) - 20} more tickets")
 
         print("="*60 + "\n")
+
+        # Save neural network weights for next session
+        self.policy.save_model(self.model_path)
 
         # Show hall of fame
         self.records.print_hall_of_fame()

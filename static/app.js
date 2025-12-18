@@ -160,28 +160,37 @@ function updateGhostPanel(data) {
     const panel = document.getElementById('ghost-panel');
     const content = document.getElementById('ghost-content');
 
+    // Show current session best
+    const sessionBest = data.best_num_tickets || 0;
+    let sessionBestHTML = '';
+    if (sessionBest > 0) {
+        sessionBestHTML = `<p class="session-best">🎯 Session Best: <strong>${sessionBest}</strong> tickets</p>`;
+    }
+
     if (data.ghost_tickets === null) {
         content.innerHTML = `
-            <p class="ghost-record">No record yet!</p>
+            ${sessionBestHTML}
+            <p class="ghost-record">No previous record!</p>
             <p class="ghost-status new-record">🆕 Setting first record!</p>
         `;
         panel.classList.remove('new-record');
     } else {
         const ticketDiff = data.num_tickets - data.ghost_tickets;
+        const bestDiff = sessionBest > 0 ? sessionBest - data.ghost_tickets : ticketDiff;
         let statusClass = 'behind';
         let statusText = '';
 
-        if (data.best_coverage >= data.ghost_coverage) {
-            if (ticketDiff < 0) {
+        if (data.best_coverage >= 99.999 && sessionBest > 0) {
+            if (bestDiff < 0) {
                 statusClass = 'ahead';
-                statusText = `🏆 ${-ticketDiff} FEWER TICKETS!`;
+                statusText = `🏆 ${-bestDiff} FEWER TICKETS!`;
                 panel.classList.add('new-record');
-            } else if (ticketDiff === 0) {
+            } else if (bestDiff === 0) {
                 statusClass = 'ahead';
                 statusText = '✅ Matched record!';
                 panel.classList.add('new-record');
             } else {
-                statusText = `⚠️ ${ticketDiff} more tickets`;
+                statusText = `⚠️ ${bestDiff} more than record`;
                 panel.classList.remove('new-record');
             }
         } else {
@@ -191,7 +200,8 @@ function updateGhostPanel(data) {
         }
 
         content.innerHTML = `
-            <p class="ghost-record">Record: ${data.ghost_tickets} tickets @ ${data.ghost_coverage.toFixed(1)}%</p>
+            ${sessionBestHTML}
+            <p class="ghost-record">🏁 Record to Beat: <strong>${data.ghost_tickets}</strong> tickets @ ${data.ghost_coverage.toFixed(1)}%</p>
             <p class="ghost-status ${statusClass}">${statusText}</p>
         `;
     }

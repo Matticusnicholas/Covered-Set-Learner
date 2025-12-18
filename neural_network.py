@@ -170,6 +170,48 @@ class CoveredSetPolicy(nn.Module):
         print(f"🧠 Neural Network initialized on {self.device}")
         print(f"   Parameters: {sum(p.numel() for p in self.parameters()):,}")
 
+    def save_model(self, path: str):
+        """Save model weights and configuration."""
+        save_dict = {
+            'model_state_dict': self.state_dict(),
+            'pool_size': self.pool_size,
+            'draw_size': self.draw_size,
+            'match_required': self.match_required,
+        }
+        torch.save(save_dict, path)
+        print(f"💾 Model saved to {path}")
+
+    def load_model(self, path: str) -> bool:
+        """Load model weights from file. Returns True if successful."""
+        import os
+        if not os.path.exists(path):
+            print(f"⚠️  No saved model found at {path}")
+            return False
+
+        try:
+            checkpoint = torch.load(path, map_location=self.device)
+
+            # Verify configuration matches
+            if (checkpoint.get('pool_size') != self.pool_size or
+                checkpoint.get('draw_size') != self.draw_size or
+                checkpoint.get('match_required') != self.match_required):
+                print(f"⚠️  Model config mismatch - starting fresh")
+                return False
+
+            self.load_state_dict(checkpoint['model_state_dict'])
+            print(f"✅ Model loaded from {path}")
+            return True
+        except Exception as e:
+            print(f"⚠️  Error loading model: {e}")
+            return False
+
+    @staticmethod
+    def get_model_path(pool_size: int, draw_size: int, match_required: int) -> str:
+        """Get standard model path for a wheel configuration."""
+        import os
+        os.makedirs('models', exist_ok=True)
+        return f"models/policy_{match_required}of{draw_size}from{pool_size}.pt"
+
     def generate_ticket(self, coverage_state: torch.Tensor,
                        temperature: float = 1.0,
                        greedy: bool = False) -> Tuple[Tuple[int, ...], torch.Tensor]:
@@ -337,6 +379,9 @@ class ReinforcementTrainer:
         self.episode_rewards = []
         self.episode_lengths = []
 
+        # Track best performance for penalty system
+        self.best_tickets_to_100 = None  # Best ticket count to reach 100%
+
     def compute_returns(self, rewards: List[float], gamma: float = 0.99) -> torch.Tensor:
         """Compute discounted returns."""
         returns = []
@@ -400,6 +445,12 @@ class ReinforcementTrainer:
             if improvement > 1.0:
                 reward += improvement * 0.5
 
+            # NEGATIVE PENALTY if we've exceeded our best performance
+            if self.best_tickets_to_100 is not None and len(tickets) > self.best_tickets_to_100:
+                excess = len(tickets) - self.best_tickets_to_100
+                # Increasing penalty the more we exceed the best
+                reward -= 0.1 * excess
+
             # Check if done - 100% coverage reached! (small tolerance for floating point)
             if coverage >= target_coverage - 0.001:
                 # HUGE BONUS scaled by efficiency
@@ -407,6 +458,21 @@ class ReinforcementTrainer:
                 # If you match theoretical minimum, get max bonus
                 efficiency_ratio = theoretical_min / len(tickets)
                 completion_bonus = 50.0 * efficiency_ratio  # Up to 50 points if optimal
+
+                # EXTRA BONUS if we beat our best!
+                if self.best_tickets_to_100 is None or len(tickets) < self.best_tickets_to_100:
+                    if self.best_tickets_to_100 is not None:
+                        improvement_bonus = (self.best_tickets_to_100 - len(tickets)) * 5.0
+                        reward += improvement_bonus
+                        print(f"  🏆 NEW BEST! Beat previous {self.best_tickets_to_100} by {self.best_tickets_to_100 - len(tickets)} tickets!")
+                    self.best_tickets_to_100 = len(tickets)
+                elif len(tickets) > self.best_tickets_to_100:
+                    # NEGATIVE PENALTY for worse performance at completion
+                    excess = len(tickets) - self.best_tickets_to_100
+                    penalty = excess * 2.0  # Strong penalty for finishing worse
+                    reward -= penalty
+                    print(f"  ❌ {excess} more tickets than best ({self.best_tickets_to_100})")
+
                 reward += completion_bonus
                 rewards.append(reward)
                 print(f"  🎯 100% coverage in {len(tickets)} tickets! (theoretical min: {theoretical_min})")
