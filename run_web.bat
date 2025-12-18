@@ -99,6 +99,18 @@ echo.
 :: Run with web mode
 python main.py --web %ARGS%
 
+:: Check if there was an error
+if errorlevel 1 (
+    echo.
+    echo ========================================
+    echo   [ERROR] Program crashed!
+    echo   Check the error message above.
+    echo ========================================
+    echo.
+    pause
+    exit /b 1
+)
+
 :: Deactivate virtual environment
 deactivate
 

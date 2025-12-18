@@ -647,4 +647,17 @@ Examples:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        import traceback
+        print("\n" + "="*60)
+        print("❌ ERROR: Program crashed!")
+        print("="*60)
+        print(f"\nError type: {type(e).__name__}")
+        print(f"Error message: {e}")
+        print("\nFull traceback:")
+        traceback.print_exc()
+        print("\n" + "="*60)
+        input("Press Enter to exit...")
+        sys.exit(1)
