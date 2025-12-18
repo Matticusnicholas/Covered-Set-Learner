@@ -48,13 +48,17 @@ function resizeCanvases() {
     particleCanvas.height = window.innerHeight;
 }
 
-// Socket.IO Connection
+// Socket.IO Connection + Polling fallback
+let pollInterval = null;
+let lastSocketUpdate = 0;
+
 function initializeSocket() {
     socket = io();
 
     socket.on('connect', () => {
-        console.log('Connected to server');
+        console.log('Connected to server via WebSocket');
         updateStatus('connected', 'Connected');
+        lastSocketUpdate = Date.now();
     });
 
     socket.on('disconnect', () => {
@@ -63,8 +67,25 @@ function initializeSocket() {
     });
 
     socket.on('training_update', (data) => {
+        console.log('WebSocket update received:', data.num_tickets, 'tickets');
+        lastSocketUpdate = Date.now();
         handleTrainingUpdate(data);
     });
+
+    // Fallback polling in case WebSocket updates aren't working
+    pollInterval = setInterval(async () => {
+        // Only poll if we haven't received a WebSocket update recently
+        if (Date.now() - lastSocketUpdate > 2000) {
+            try {
+                const response = await fetch('/api/state');
+                const data = await response.json();
+                console.log('Polling update:', data.num_tickets, 'tickets');
+                handleTrainingUpdate(data);
+            } catch (e) {
+                console.log('Polling failed:', e);
+            }
+        }
+    }, 500);  // Poll every 500ms if WebSocket is stale
 }
 
 function updateStatus(status, text) {

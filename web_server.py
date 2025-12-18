@@ -9,6 +9,7 @@ import os
 import json
 import threading
 import time
+from queue import Queue, Empty
 from flask import Flask, render_template, jsonify
 from flask_socketio import SocketIO, emit
 from typing import Dict, List, Tuple, Optional
@@ -18,7 +19,12 @@ app = Flask(__name__,
             template_folder='templates',
             static_folder='static')
 app.config['SECRET_KEY'] = 'lottery-neural-network-secret'
+
+# Use threading mode but with a message queue for updates
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+
+# Message queue for thread-safe updates
+update_queue = Queue()
 
 # Global state for the training
 training_state = {
@@ -133,7 +139,17 @@ class WebVisualizer:
 
     def _emit_update(self):
         """Emit update to all connected clients."""
-        socketio.emit('training_update', training_state)
+        # Make a copy of the state to avoid threading issues
+        state_copy = dict(training_state)
+        state_copy['tickets'] = list(training_state['tickets'])
+        state_copy['current_ticket'] = list(training_state['current_ticket'])
+        state_copy['heat_map'] = dict(training_state['heat_map'])
+
+        # Emit directly - Flask-SocketIO handles cross-thread emit
+        try:
+            socketio.emit('training_update', state_copy, namespace='/')
+        except Exception as e:
+            print(f"  ⚠️ Emit error: {e}")
 
     def run_frame(self) -> float:
         """Compatibility method - returns a small dt."""
