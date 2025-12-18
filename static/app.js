@@ -89,19 +89,21 @@ function handleTrainingUpdate(data) {
     document.getElementById('draw-info').textContent = `Pick: ${data.draw_size}`;
     document.getElementById('match-info').textContent = `Match: ${data.match_required}+`;
 
-    // Update stats
+    // Update stats - use 4 decimal places so viewers see progress near 100%
     document.getElementById('stat-generation').textContent = data.generation;
-    document.getElementById('stat-coverage').textContent = data.coverage.toFixed(1) + '%';
+    document.getElementById('stat-coverage').textContent = data.coverage.toFixed(4) + '%';
     document.getElementById('stat-tickets').textContent = data.num_tickets;
-    document.getElementById('stat-best').textContent = data.best_coverage.toFixed(1) + '%';
+    // Show best ticket count (not coverage) - this is what we're trying to minimize!
+    const bestTickets = data.best_num_tickets || 0;
+    document.getElementById('stat-best').textContent = bestTickets > 0 ? bestTickets + ' tickets' : '-';
     document.getElementById('stat-efficiency').textContent = (data.efficiency || 0).toFixed(2);
     document.getElementById('stat-time').textContent = formatTime(data.elapsed_time || 0);
 
-    // Update progress bar
+    // Update progress bar - use 4 decimal places
     const progressFill = document.getElementById('progress-fill');
     const progressText = document.getElementById('progress-text');
-    progressFill.style.width = data.coverage + '%';
-    progressText.textContent = data.coverage.toFixed(1) + '%';
+    progressFill.style.width = Math.min(data.coverage, 100) + '%';
+    progressText.textContent = data.coverage.toFixed(4) + '%';
 
     // Update ghost panel
     updateGhostPanel(data);
