@@ -14,14 +14,23 @@ from flask import Flask, render_template, jsonify
 from flask_socketio import SocketIO, emit
 from typing import Dict, List, Tuple, Optional
 
+# Try to use eventlet for better cross-thread emit support
+try:
+    import eventlet
+    eventlet.monkey_patch()
+    ASYNC_MODE = 'eventlet'
+except ImportError:
+    ASYNC_MODE = 'threading'
+
 # Create Flask app
 app = Flask(__name__,
             template_folder='templates',
             static_folder='static')
 app.config['SECRET_KEY'] = 'lottery-neural-network-secret'
 
-# Use threading mode but with a message queue for updates
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+# Use eventlet if available, fallback to threading
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode=ASYNC_MODE)
+print(f"🌐 SocketIO using async_mode: {ASYNC_MODE}")
 
 # Message queue for thread-safe updates
 update_queue = Queue()
@@ -145,11 +154,8 @@ class WebVisualizer:
         state_copy['current_ticket'] = list(training_state['current_ticket'])
         state_copy['heat_map'] = dict(training_state['heat_map'])
 
-        # Emit directly - Flask-SocketIO handles cross-thread emit
-        try:
-            socketio.emit('training_update', state_copy, namespace='/')
-        except Exception as e:
-            print(f"  ⚠️ Emit error: {e}")
+        # Emit to all connected clients
+        socketio.emit('training_update', state_copy)
 
     def run_frame(self) -> float:
         """Compatibility method - returns a small dt."""

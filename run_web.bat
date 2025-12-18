@@ -69,7 +69,7 @@ if !NEEDS_INSTALL!==1 (
 
     :: Install web and other requirements
     echo [SETUP] Installing Flask, SocketIO, and other dependencies...
-    pip install flask flask-socketio python-socketio python-engineio gevent gevent-websocket --quiet
+    pip install flask flask-socketio python-socketio python-engineio eventlet --quiet
     pip install numpy tqdm colorama pillow --quiet
 
     echo.
