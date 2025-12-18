@@ -169,7 +169,7 @@ class LotteryLearner:
 
         return heat
 
-    def train_generation(self, max_tickets: int = 100,
+    def train_generation(self, max_tickets: int = 500,
                         temperature: float = 1.0) -> Dict:
         """
         Train one generation of ticket generation.
@@ -348,7 +348,7 @@ class LotteryLearner:
 
                 if training_mode == 'greedy':
                     stats = self.train_generation(
-                        max_tickets=100,
+                        max_tickets=1000,  # Keep going until 100% coverage
                         temperature=max(0.3, temperature)
                     )
                 elif training_mode == 'rl':
@@ -358,7 +358,7 @@ class LotteryLearner:
                         stats = self.train_episode_rl()
                     else:
                         stats = self.train_generation(
-                            max_tickets=100,
+                            max_tickets=1000,  # Keep going until 100% coverage
                             temperature=temperature
                         )
 

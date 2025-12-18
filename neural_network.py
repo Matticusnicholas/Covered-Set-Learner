@@ -349,7 +349,7 @@ class ReinforcementTrainer:
             returns = (returns - returns.mean()) / (returns.std() + 1e-8)
         return returns
 
-    def train_episode(self, calculator, max_tickets: int = 100,
+    def train_episode(self, calculator, max_tickets: int = 1000,
                      target_coverage: float = 100.0) -> dict:
         """
         Train on a single episode of ticket generation.
