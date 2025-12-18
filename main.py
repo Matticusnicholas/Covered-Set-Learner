@@ -180,33 +180,42 @@ class LotteryLearner:
         self.generation += 1
         tickets = []
         heat_map = {}  # Start empty, will populate quickly
+        coverage_state = None
 
         start_time = time.time()
         print(f"\n📝 Generation {self.generation} - Generating tickets...")
 
         for step in range(max_tickets):
-            # Generate ticket using smart selection or random
-            if step == 0 or step % 15 == 0:
-                # Occasionally update what's uncovered (expensive operation)
-                uncovered = self.calculator.get_uncovered_draws(tickets, max_return=2000)
-                heat_map = self.compute_heat_map(uncovered)
-                coverage_state = self.policy.compute_coverage_state(tickets, uncovered)
+            # FIRST TICKET: Generate immediately with random selection (no waiting!)
+            if step == 0:
+                # Quick random start - no expensive computation
+                ticket = self.calculator.generate_random_ticket()
+                log_prob = torch.tensor(0.0)  # Placeholder
+            else:
+                # Update coverage state occasionally (expensive but worth it)
+                if step == 1 or step % 15 == 0:
+                    uncovered = self.calculator.get_uncovered_draws(tickets, max_return=2000)
+                    heat_map = self.compute_heat_map(uncovered)
+                    coverage_state = self.policy.compute_coverage_state(tickets, uncovered)
 
-            # Generate new ticket
-            ticket, log_prob = self.policy.generate_ticket(
-                coverage_state,
-                temperature=temperature,
-                greedy=(temperature < 0.3)
-            )
+                # Generate ticket using neural network
+                ticket, log_prob = self.policy.generate_ticket(
+                    coverage_state,
+                    temperature=temperature,
+                    greedy=(temperature < 0.3)
+                )
 
             # Avoid duplicate tickets
             attempts = 0
             while ticket in tickets and attempts < 5:
-                ticket, log_prob = self.policy.generate_ticket(
-                    coverage_state,
-                    temperature=min(2.0, temperature + 0.5),
-                    greedy=False
-                )
+                if coverage_state is not None:
+                    ticket, log_prob = self.policy.generate_ticket(
+                        coverage_state,
+                        temperature=min(2.0, temperature + 0.5),
+                        greedy=False
+                    )
+                else:
+                    ticket = self.calculator.generate_random_ticket()
                 attempts += 1
 
             tickets.append(ticket)
@@ -473,8 +482,8 @@ Examples:
                        help='Target coverage percentage (default: 100)')
     parser.add_argument('--gens', type=int, default=500,
                        help='Number of generations (default: 500)')
-    parser.add_argument('--mode', choices=['greedy', 'rl', 'hybrid'], default='hybrid',
-                       help='Training mode (default: hybrid)')
+    parser.add_argument('--mode', choices=['greedy', 'rl', 'hybrid'], default='greedy',
+                       help='Training mode (default: greedy - shows numbers immediately)')
     parser.add_argument('--headless', action='store_true',
                        help='Run without visualization')
     parser.add_argument('--web', action='store_true',

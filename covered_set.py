@@ -164,14 +164,17 @@ class CoveredSetCalculator:
 
     def get_uncovered_draws(self, tickets: List[Tuple[int, ...]],
                            max_return: int = 10000) -> List[Tuple[int, ...]]:
-        """Get list of draws not yet covered by the tickets."""
+        """Get list of draws not yet covered by the tickets - OPTIMIZED."""
         if not tickets:
-            # Return subset if too many
+            # Return random subset quickly using batch operation
             if self.total_draws > max_return:
                 indices = torch.randperm(self.total_draws, device=self.device)[:max_return]
-                return [tuple(self.all_draws_tensor[i].cpu().tolist()) for i in indices]
-            return [tuple(self.all_draws_tensor[i].cpu().tolist())
-                    for i in range(self.total_draws)]
+            else:
+                indices = torch.arange(min(self.total_draws, max_return), device=self.device)
+
+            # Batch convert to CPU once, then to list
+            selected = self.all_draws_tensor[indices].cpu().numpy()
+            return [tuple(row) for row in selected]
 
         result = self.calculate_coverage(tickets, return_details=True)
         uncovered_indices = result['uncovered_indices']
@@ -179,12 +182,17 @@ class CoveredSetCalculator:
         if isinstance(uncovered_indices, int):
             uncovered_indices = [uncovered_indices]
 
+        if not uncovered_indices:
+            return []
+
         # Limit return size
         if len(uncovered_indices) > max_return:
             uncovered_indices = uncovered_indices[:max_return]
 
-        return [tuple(self.all_draws_tensor[i].cpu().tolist())
-                for i in uncovered_indices]
+        # Batch convert - much faster than individual lookups
+        indices_tensor = torch.tensor(uncovered_indices, device=self.device)
+        selected = self.all_draws_tensor[indices_tensor].cpu().numpy()
+        return [tuple(row) for row in selected]
 
     def theoretical_minimum_tickets(self) -> int:
         """Estimate theoretical minimum tickets needed for full coverage."""

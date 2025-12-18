@@ -236,19 +236,28 @@ class CoveredSetPolicy(nn.Module):
 
         Returns a tensor indicating which numbers appear most frequently
         in uncovered draws (numbers we should prioritize).
+
+        OPTIMIZED: Uses vectorized operations instead of Python loops.
         """
         state = torch.zeros(1, self.pool_size, device=self.device)
 
         if not uncovered_draws:
-            return state
+            # Return random state to start generating immediately
+            return torch.rand(1, self.pool_size, device=self.device)
 
-        # Count frequency of each number in uncovered draws
-        for draw in uncovered_draws:
-            for num in draw:
-                state[0, num] += 1
+        # VECTORIZED: Convert to tensor and use scatter_add
+        num_draws = len(uncovered_draws)
+        draw_size = len(uncovered_draws[0])
+
+        # Flatten draws to tensor
+        draws_tensor = torch.tensor(uncovered_draws, device=self.device, dtype=torch.int64).flatten()
+
+        # Use scatter_add for fast counting
+        ones = torch.ones(num_draws * draw_size, device=self.device)
+        state[0].scatter_add_(0, draws_tensor, ones)
 
         # Normalize
-        state = state / (len(uncovered_draws) + 1e-10)
+        state = state / (num_draws + 1e-10)
 
         return state
 
