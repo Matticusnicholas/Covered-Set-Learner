@@ -363,8 +363,11 @@ class ReinforcementTrainer:
         rewards = []
         coverages = []
 
+        # Get theoretical minimum for reward scaling
+        theoretical_min = calculator.theoretical_minimum_tickets()
+
         # Initial state
-        uncovered = calculator.get_uncovered_draws([])
+        uncovered = calculator.get_uncovered_draws([], max_return=2000)
         coverage_state = self.policy.compute_coverage_state([], uncovered)
 
         for step in range(max_tickets):
@@ -383,23 +386,38 @@ class ReinforcementTrainer:
             coverage = result['coverage']
             coverages.append(coverage)
 
-            # Reward: improvement in coverage
+            # REWARD SYSTEM - Optimized for FEWER tickets
             prev_coverage = coverages[-2] if len(coverages) > 1 else 0
             improvement = coverage - prev_coverage
 
-            # Bonus for efficiency (fewer tickets is better)
-            efficiency_bonus = 0.1 if improvement > 0.1 else 0
+            # Base reward: coverage improvement (scaled up)
+            reward = improvement * 2.0
 
-            rewards.append(improvement + efficiency_bonus)
+            # PENALTY for each ticket (encourages efficiency)
+            reward -= 0.05
 
-            # Check if done
+            # BIG BONUS for high-value tickets (>1% coverage gain)
+            if improvement > 1.0:
+                reward += improvement * 0.5
+
+            # Check if done - 100% coverage reached!
             if coverage >= target_coverage:
-                rewards[-1] += 10.0  # Bonus for reaching goal
+                # HUGE BONUS scaled by efficiency
+                # Fewer tickets = bigger bonus
+                # If you match theoretical minimum, get max bonus
+                efficiency_ratio = theoretical_min / len(tickets)
+                completion_bonus = 50.0 * efficiency_ratio  # Up to 50 points if optimal
+                reward += completion_bonus
+                rewards.append(reward)
+                print(f"  🎯 100% coverage in {len(tickets)} tickets! (theoretical min: {theoretical_min})")
                 break
 
-            # Update state
-            uncovered = calculator.get_uncovered_draws(tickets)
-            coverage_state = self.policy.compute_coverage_state(tickets, uncovered)
+            rewards.append(reward)
+
+            # Update state (less frequently for speed)
+            if step % 10 == 0:
+                uncovered = calculator.get_uncovered_draws(tickets, max_return=2000)
+                coverage_state = self.policy.compute_coverage_state(tickets, uncovered)
 
         # Compute returns and update policy
         returns = self.compute_returns(rewards)
