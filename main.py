@@ -258,9 +258,9 @@ class LotteryLearner:
                 # Headless - print every ticket
                 print(f"  #{step+1}: {tuple(n+1 for n in ticket)} -> {coverage:.1f}%")
 
-            # Stop if target reached
-            if coverage >= self.target_coverage:
-                print(f"  ✅ Target coverage reached!")
+            # Stop if target reached (use small tolerance for floating point)
+            if coverage >= self.target_coverage - 0.001:
+                print(f"  ✅ Target coverage reached! {coverage:.2f}%")
                 break
 
         elapsed = time.time() - start_time

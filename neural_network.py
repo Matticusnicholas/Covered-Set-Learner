@@ -400,8 +400,8 @@ class ReinforcementTrainer:
             if improvement > 1.0:
                 reward += improvement * 0.5
 
-            # Check if done - 100% coverage reached!
-            if coverage >= target_coverage:
+            # Check if done - 100% coverage reached! (small tolerance for floating point)
+            if coverage >= target_coverage - 0.001:
                 # HUGE BONUS scaled by efficiency
                 # Fewer tickets = bigger bonus
                 # If you match theoretical minimum, get max bonus
