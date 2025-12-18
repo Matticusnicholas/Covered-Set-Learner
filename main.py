@@ -179,34 +179,29 @@ class LotteryLearner:
         """
         self.generation += 1
         tickets = []
-
-        # Clear visualization for new generation
-        if self.viz and hasattr(self.viz, 'new_generation'):
-            # Reset the ticket display for this generation
-            pass  # new_generation is called after, so tickets start fresh
-
-        # Initial state
-        uncovered = self.calculator.get_uncovered_draws([])
-        heat_map = self.compute_heat_map(uncovered)
+        heat_map = {}  # Start empty, will populate quickly
 
         start_time = time.time()
-
         print(f"\n📝 Generation {self.generation} - Generating tickets...")
 
         for step in range(max_tickets):
-            # Compute current state
-            coverage_state = self.policy.compute_coverage_state(tickets, uncovered)
+            # Generate ticket using smart selection or random
+            if step == 0 or step % 15 == 0:
+                # Occasionally update what's uncovered (expensive operation)
+                uncovered = self.calculator.get_uncovered_draws(tickets, max_return=2000)
+                heat_map = self.compute_heat_map(uncovered)
+                coverage_state = self.policy.compute_coverage_state(tickets, uncovered)
 
             # Generate new ticket
             ticket, log_prob = self.policy.generate_ticket(
                 coverage_state,
                 temperature=temperature,
-                greedy=(temperature < 0.3)  # More greedy at low temps
+                greedy=(temperature < 0.3)
             )
 
             # Avoid duplicate tickets
             attempts = 0
-            while ticket in tickets and attempts < 10:
+            while ticket in tickets and attempts < 5:
                 ticket, log_prob = self.policy.generate_ticket(
                     coverage_state,
                     temperature=min(2.0, temperature + 0.5),
@@ -216,17 +211,12 @@ class LotteryLearner:
 
             tickets.append(ticket)
 
-            # Calculate new coverage
+            # Calculate coverage (fast GPU operation)
             result = self.calculator.calculate_coverage(tickets)
             coverage = result['coverage']
 
-            # Update visualization - show each ticket as it's generated
+            # Update visualization
             if self.viz:
-                # Update heat map periodically
-                if step % 3 == 0:
-                    uncovered = self.calculator.get_uncovered_draws(tickets)
-                    heat_map = self.compute_heat_map(uncovered)
-
                 current_time = time.time() - start_time
                 stats = {
                     'generation': self.generation,
@@ -239,21 +229,16 @@ class LotteryLearner:
                     'temperature': temperature
                 }
 
-                # Add the new ticket to display
                 self.viz.add_ticket(ticket)
+                self.viz.update(0.05, stats, ticket, heat_map)
 
-                # Update with current ticket highlighted
-                self.viz.update(0.1, stats, ticket, heat_map)
-
-                # For pygame, call draw
                 if hasattr(self.viz, 'draw'):
                     self.viz.draw()
 
-                # Small delay so user can see each ticket being generated
+                # Delay for visibility (web mode only)
                 if self.web_mode:
-                    time.sleep(0.15)  # 150ms delay for web mode
+                    time.sleep(0.05)  # 50ms - fast but visible
 
-                # Run frame for timing (handles events for pygame)
                 if hasattr(self.viz, 'run_frame'):
                     self.viz.run_frame()
 
@@ -261,16 +246,13 @@ class LotteryLearner:
                     self.running = False
                     break
             else:
-                # Headless mode - still print progress occasionally
-                if step % 10 == 0:
-                    print(f"  Ticket {step+1}: {tuple(n+1 for n in ticket)} -> {coverage:.1f}% coverage")
+                # Headless - print every ticket
+                print(f"  #{step+1}: {tuple(n+1 for n in ticket)} -> {coverage:.1f}%")
 
-            # Check if we've reached target
+            # Stop if target reached
             if coverage >= self.target_coverage:
+                print(f"  ✅ Target coverage reached!")
                 break
-
-            # Update uncovered draws for next iteration
-            uncovered = self.calculator.get_uncovered_draws(tickets)
 
         elapsed = time.time() - start_time
 
