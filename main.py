@@ -188,11 +188,16 @@ class LotteryLearner:
         """
         Train one generation of ticket generation.
 
+        NOW WITH LEARNING: After each generation, the neural network
+        learns from the results to improve future generations.
+
         Returns:
             Dictionary with generation statistics
         """
         self.generation += 1
         tickets = []
+        log_probs = []  # Track log probs for learning
+        coverages = []  # Track coverage at each step
         heat_map = {}  # Start empty, will populate quickly
         coverage_state = None
 
@@ -204,7 +209,7 @@ class LotteryLearner:
             if step == 0:
                 # Quick random start - no expensive computation
                 ticket = self.calculator.generate_random_ticket()
-                log_prob = torch.tensor(0.0)  # Placeholder
+                log_prob = torch.tensor(0.0, device=self.policy.device)
             else:
                 # Update coverage state occasionally (expensive but worth it)
                 if step == 1 or step % 15 == 0:
@@ -212,7 +217,8 @@ class LotteryLearner:
                     heat_map = self.compute_heat_map(uncovered)
                     coverage_state = self.policy.compute_coverage_state(tickets, uncovered)
 
-                # Generate ticket using neural network
+                # Generate ticket using neural network (enable gradients for learning)
+                self.policy.train()
                 ticket, log_prob = self.policy.generate_ticket(
                     coverage_state,
                     temperature=temperature,
@@ -230,13 +236,17 @@ class LotteryLearner:
                     )
                 else:
                     ticket = self.calculator.generate_random_ticket()
+                    log_prob = torch.tensor(0.0, device=self.policy.device)
                 attempts += 1
 
             tickets.append(ticket)
+            if step > 0:  # Don't track first random ticket
+                log_probs.append(log_prob)
 
             # Calculate coverage (fast GPU operation)
             result = self.calculator.calculate_coverage(tickets)
             coverage = result['coverage']
+            coverages.append(coverage)
 
             # STOP IMMEDIATELY if target reached (check BEFORE visualization)
             if coverage >= self.target_coverage - 0.001:
@@ -316,6 +326,61 @@ class LotteryLearner:
             self.best_coverage = final_result['coverage']
             self.best_tickets = tickets.copy()
             print(f"\n🎉 NEW BEST! Generation {self.generation}: {self.best_coverage:.2f}% with {len(tickets)} tickets")
+
+        # LEARNING STEP: Update neural network based on this generation's performance
+        if len(log_probs) > 0 and len(coverages) > 1:
+            # Compute rewards for each ticket based on coverage improvement
+            rewards = []
+            theoretical_min = self.calculator.theoretical_minimum_tickets()
+
+            for i in range(1, len(coverages)):  # Skip first (random) ticket
+                prev_cov = coverages[i-1]
+                curr_cov = coverages[i]
+                improvement = curr_cov - prev_cov
+
+                # Reward = coverage improvement - small penalty per ticket
+                reward = improvement * 2.0 - 0.05
+
+                # Bonus for high-value tickets
+                if improvement > 1.0:
+                    reward += improvement * 0.5
+
+                # Penalty if exceeding best known
+                if self.trainer.best_tickets_to_100 is not None and i > self.trainer.best_tickets_to_100:
+                    reward -= 0.1 * (i - self.trainer.best_tickets_to_100)
+
+                rewards.append(reward)
+
+            # Big reward/penalty at the end based on efficiency
+            if final_result['coverage'] >= 99.999 and rewards:
+                efficiency_ratio = theoretical_min / len(tickets)
+                final_bonus = 50.0 * efficiency_ratio
+
+                # Extra bonus for beating best, penalty for worse
+                if self.trainer.best_tickets_to_100 is None or len(tickets) < self.trainer.best_tickets_to_100:
+                    if self.trainer.best_tickets_to_100 is not None:
+                        final_bonus += (self.trainer.best_tickets_to_100 - len(tickets)) * 5.0
+                    self.trainer.best_tickets_to_100 = len(tickets)
+                elif len(tickets) > self.trainer.best_tickets_to_100:
+                    final_bonus -= (len(tickets) - self.trainer.best_tickets_to_100) * 2.0
+
+                rewards[-1] += final_bonus
+
+            # Compute returns and update policy
+            if rewards and len(log_probs) == len(rewards):
+                returns = self.trainer.compute_returns(rewards)
+                log_probs_tensor = torch.stack(log_probs)
+
+                # Policy gradient update
+                loss = -(log_probs_tensor * returns).mean()
+
+                self.trainer.optimizer.zero_grad()
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.policy.parameters(), 1.0)
+                self.trainer.optimizer.step()
+
+                if self.generation % 10 == 0:
+                    print(f"  🧠 Learning update: loss={loss.item():.4f}")
 
         # Prepare statistics
         stats = {

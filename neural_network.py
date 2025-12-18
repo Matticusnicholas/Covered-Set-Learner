@@ -214,7 +214,8 @@ class CoveredSetPolicy(nn.Module):
 
     def generate_ticket(self, coverage_state: torch.Tensor,
                        temperature: float = 1.0,
-                       greedy: bool = False) -> Tuple[Tuple[int, ...], torch.Tensor]:
+                       greedy: bool = False,
+                       enable_grad: bool = True) -> Tuple[Tuple[int, ...], torch.Tensor]:
         """
         Generate a single ticket based on current coverage state.
 
@@ -222,18 +223,23 @@ class CoveredSetPolicy(nn.Module):
             coverage_state: Current coverage information
             temperature: Exploration temperature
             greedy: If True, always pick highest probability numbers
+            enable_grad: If True, track gradients for learning (default: True)
 
         Returns:
             ticket: Tuple of selected numbers
-            log_prob: Log probability of the selection
+            log_prob: Log probability of the selection (differentiable if enable_grad)
         """
-        self.eval()
-        with torch.no_grad():
+        # Get logits from generator - with or without gradients
+        if enable_grad:
             logits, _ = self.generator(coverage_state, temperature)
+        else:
+            self.eval()
+            with torch.no_grad():
+                logits, _ = self.generator(coverage_state, temperature)
 
         # Select numbers one by one
         selected = []
-        total_log_prob = 0
+        total_log_prob = torch.tensor(0.0, device=self.device, requires_grad=enable_grad)
 
         mask = torch.zeros(self.pool_size, device=self.device)
 
