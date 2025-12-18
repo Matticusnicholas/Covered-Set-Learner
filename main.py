@@ -205,6 +205,10 @@ class LotteryLearner:
         print(f"\n📝 Generation {self.generation} - Generating tickets...")
 
         for step in range(max_tickets):
+            # Debug: show progress
+            if step < 5 or step % 50 == 0:
+                print(f"  Step {step}...", end=" ", flush=True)
+
             # FIRST TICKET: Generate immediately with random selection (no waiting!)
             if step == 0:
                 # Quick random start - no expensive computation
@@ -222,7 +226,7 @@ class LotteryLearner:
                 ticket, log_prob = self.policy.generate_ticket(
                     coverage_state,
                     temperature=temperature,
-                    greedy=(temperature < 0.3)
+                    greedy=False  # Don't use greedy with gradients to avoid issues
                 )
 
             # Avoid duplicate tickets
@@ -247,6 +251,10 @@ class LotteryLearner:
             result = self.calculator.calculate_coverage(tickets)
             coverage = result['coverage']
             coverages.append(coverage)
+
+            # Debug: show coverage achieved
+            if step < 5 or step % 50 == 0:
+                print(f"coverage={coverage:.2f}%")
 
             # STOP IMMEDIATELY if target reached (check BEFORE visualization)
             if coverage >= self.target_coverage - 0.001:
@@ -302,6 +310,7 @@ class LotteryLearner:
                     self.viz.run_frame()
 
                 if not self.viz.running:
+                    print(f"  ⚠️ Visualization stopped at step {step}")
                     self.running = False
                     break
             else:
