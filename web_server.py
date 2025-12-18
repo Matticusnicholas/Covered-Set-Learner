@@ -83,12 +83,22 @@ class WebVisualizer:
             training_state['temperature'] = stats.get('temperature', 1.0)
             training_state['elapsed_time'] = stats.get('elapsed_time', 0)
 
-            # Check for new record
-            if training_state['ghost_tickets']:
-                training_state['is_new_record'] = (
-                    training_state['best_coverage'] >= training_state['ghost_coverage'] and
-                    training_state['num_tickets'] <= training_state['ghost_tickets']
-                )
+            # Track best number of tickets (fewest to reach 100%)
+            if 'best_num_tickets' in stats:
+                training_state['best_num_tickets'] = stats.get('best_num_tickets', 0)
+
+            # Check for new record - at 100% coverage with fewer tickets than ghost
+            current_coverage = stats.get('coverage', 0)
+            current_tickets = stats.get('num_tickets', 0)
+            if current_coverage >= 99.999:
+                # Track session record (fewest tickets to 100%)
+                if training_state['best_num_tickets'] == 0 or current_tickets < training_state['best_num_tickets']:
+                    training_state['best_num_tickets'] = current_tickets
+                    print(f"🏆 NEW SESSION RECORD: {current_tickets} tickets for 100% coverage!")
+
+            # Check if we beat the ghost
+            if training_state['ghost_tickets'] and current_coverage >= 99.999:
+                training_state['is_new_record'] = (current_tickets <= training_state['ghost_tickets'])
 
         if current_ticket:
             training_state['current_ticket'] = list(current_ticket)

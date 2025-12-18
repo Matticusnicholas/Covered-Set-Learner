@@ -224,6 +224,31 @@ class LotteryLearner:
             result = self.calculator.calculate_coverage(tickets)
             coverage = result['coverage']
 
+            # STOP IMMEDIATELY if target reached (check BEFORE visualization)
+            if coverage >= self.target_coverage - 0.001:
+                print(f"  ✅ Target coverage reached! {coverage:.2f}% with {len(tickets)} tickets")
+                # Update visualization one last time with final state
+                if self.viz:
+                    current_time = time.time() - start_time
+                    # Determine if this is a new best
+                    current_best_tickets = len(self.best_tickets) if self.best_tickets else len(tickets)
+                    if len(tickets) < current_best_tickets or self.best_coverage < 99.999:
+                        current_best_tickets = len(tickets)
+                    stats = {
+                        'generation': self.generation,
+                        'coverage': coverage,
+                        'num_tickets': len(tickets),
+                        'best_coverage': max(self.best_coverage, coverage),
+                        'best_num_tickets': current_best_tickets,
+                        'efficiency': coverage / len(tickets) if tickets else 0,
+                        'step': step,
+                        'elapsed_time': current_time,
+                        'temperature': temperature
+                    }
+                    self.viz.add_ticket(ticket)
+                    self.viz.update(0.05, stats, ticket, heat_map)
+                break
+
             # Update visualization
             if self.viz:
                 current_time = time.time() - start_time
@@ -232,6 +257,7 @@ class LotteryLearner:
                     'coverage': coverage,
                     'num_tickets': len(tickets),
                     'best_coverage': self.best_coverage,
+                    'best_num_tickets': len(self.best_tickets) if self.best_tickets else 0,
                     'efficiency': coverage / len(tickets) if tickets else 0,
                     'step': step,
                     'elapsed_time': current_time,
@@ -258,18 +284,21 @@ class LotteryLearner:
                 # Headless - print every ticket
                 print(f"  #{step+1}: {tuple(n+1 for n in ticket)} -> {coverage:.1f}%")
 
-            # Stop if target reached (use small tolerance for floating point)
-            if coverage >= self.target_coverage - 0.001:
-                print(f"  ✅ Target coverage reached! {coverage:.2f}%")
-                break
-
         elapsed = time.time() - start_time
 
         # Final coverage
         final_result = self.calculator.calculate_coverage(tickets)
 
-        # Update best
+        # Update best - prioritize: 1) higher coverage, 2) fewer tickets at same coverage
+        is_better = False
         if final_result['coverage'] > self.best_coverage:
+            is_better = True
+        elif final_result['coverage'] >= 99.999 and self.best_coverage >= 99.999:
+            # Both at 100% - fewer tickets wins!
+            if len(tickets) < len(self.best_tickets):
+                is_better = True
+
+        if is_better:
             self.best_coverage = final_result['coverage']
             self.best_tickets = tickets.copy()
             print(f"\n🎉 NEW BEST! Generation {self.generation}: {self.best_coverage:.2f}% with {len(tickets)} tickets")
