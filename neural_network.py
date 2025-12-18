@@ -258,7 +258,7 @@ class CoveredSetPolicy(nn.Module):
 
             selected.append(idx)
             mask[idx] = 1
-            total_log_prob += torch.log(probs[0, idx] + 1e-10)
+            total_log_prob = total_log_prob + torch.log(probs[0, idx] + 1e-10)
 
         return tuple(sorted(selected)), total_log_prob
 
